@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 use Spatie\Permission\Traits\HasRoles;
 use Tymon\JWTAuth\Contracts\JWTSubject;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Support\Facades\Auth;
 
 class User extends Authenticatable implements JWTSubject
 {
@@ -42,3 +43,5 @@ class User extends Authenticatable implements JWTSubject
         return $this->hasMany(Sale::class);
     }
 }
+
+

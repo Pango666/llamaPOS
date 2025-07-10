@@ -8,6 +8,7 @@ use App\Services\ProductService;
 use App\Http\Requests\StoreProductRequest;
 use App\Http\Requests\UpdateProductRequest;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 
 class ProductController extends BaseApiController
 {
@@ -18,12 +19,16 @@ class ProductController extends BaseApiController
     public function index(Request $request)
     {
         try {
-            $this->authorizeRole('owner');
-            $perPage = (int) $request->query('per_page', 15);
-            $data = $this->service->all($perPage);                  // para productos
-            return $this->success($data);
+            $rol = Auth::user()->roles->first();
+            if ($rol->name == "owner") {
+                $perPage = (int) $request->query('per_page', 15);
+                $data = $this->service->all($perPage);
+                return $this->success($data);
+            }else{
+                return $this->error('Acceso Denegado', 422);    
+            }
         } catch (\Exception $e) {
-            return $this->error('No se pudieron obtener productos', 500);
+            return $this->error('No se pudieron obtener productos', 422);
         }
     }
 

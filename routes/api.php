@@ -9,7 +9,7 @@ use App\Http\Controllers\API\ReportController;
 use App\Http\Controllers\API\SaleController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
-
+// Route::get('products',      [ProductController::class, 'index']);
 Route::post('/login',   [AuthController::class, 'login']);
 Route::post('/register', [AuthController::class, 'register']); // si quieres registro
 
@@ -17,9 +17,12 @@ Route::post('/register', [AuthController::class, 'register']); // si quieres reg
 Route::middleware('auth:api')->group(function () {
     // Dos alias para “me”:
     // GET /api/user
-    Route::get('user', [AuthController::class, 'me']);
+    Route::get('user', [AuthController::class, 'me']); //bien
     // GET /api/auth/user
     Route::get('auth/user', [AuthController::class, 'me']);
+
+    //prueba
+    Route::get('/demo', [AuthController::class, 'getRoles']);
 
     // Logout
     Route::post('logout', [AuthController::class, 'logout']);
