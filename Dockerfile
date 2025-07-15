@@ -5,8 +5,8 @@ WORKDIR /app
 COPY composer.json composer.lock ./
 RUN composer install --no-dev --optimize-autoloader --no-scripts
 
-# Stage 2: PHP runtime
-FROM php:8.1-cli
+# Stage 2: PHP runtime - CAMBIADO A PHP 8.2
+FROM php:8.2-cli
 
 # instalar librerías de SO y extensiones necesarias
 RUN apt-get update \
