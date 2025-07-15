@@ -10,8 +10,10 @@ class StoreSaleRequest extends FormRequest
 {
     public function authorize(): bool
     {
-        // Solo seller puede registrar ventas
-        return auth('api')->user()?->role === 'seller';
+        // Solo seller o owner pueden registrar ventas
+        return $this->user()
+            && method_exists($this->user(), 'hasAnyRole')
+            && $this->user()->hasAnyRole('seller', 'owner');
     }
 
     public function rules(): array
@@ -41,10 +43,12 @@ class StoreSaleRequest extends FormRequest
 
     protected function failedValidation(Validator $validator)
     {
-        throw new HttpResponseException(response()->json([
-            'status'  => 'error',
-            'message' => 'Datos inválidos al registrar venta',
-            'errors'  => $validator->errors(),
-        ], 422));
+        throw new HttpResponseException(
+            response()->json([
+                'status'  => 'error',
+                'message' => 'Datos inválidos al registrar venta',
+                'errors'  => $validator->errors(),
+            ], 422)
+        );
     }
 }

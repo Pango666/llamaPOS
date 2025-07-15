@@ -10,8 +10,9 @@ class UpdateVariantRequest extends FormRequest
 {
     public function authorize(): bool
     {
-        // Solo owner puede actualizar variantes
-        return auth('api')->user()?->role === 'owner';
+        return $this->user()
+            && method_exists($this->user(), 'hasRole')
+            && $this->user()->hasRole('owner');
     }
 
     public function rules(): array

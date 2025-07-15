@@ -10,8 +10,10 @@ class StoreProductRequest extends FormRequest
 {
     public function authorize(): bool
     {
-        // Solo owner puede crear productos
-        return auth('api')->user()?->role === 'owner';
+        // Sólo usuarios autenticados con rol 'owner'
+        return $this->user()
+            && method_exists($this->user(), 'hasRole')
+            && $this->user()->hasRole('owner');
     }
 
     public function rules(): array
@@ -36,10 +38,22 @@ class StoreProductRequest extends FormRequest
 
     protected function failedValidation(Validator $validator)
     {
-        throw new HttpResponseException(response()->json([
-            'status'  => 'error',
-            'message' => 'Datos inválidos al crear producto',
-            'errors'  => $validator->errors(),
-        ], 422));
+        throw new HttpResponseException(
+            response()->json([
+                'status'  => 'error',
+                'message' => 'Datos inválidos al crear producto',
+                'errors'  => $validator->errors(),
+            ], 422)
+        );
+    }
+
+    protected function failedAuthorization()
+    {
+        throw new HttpResponseException(
+            response()->json([
+                'status'  => 'error',
+                'message' => 'No autorizado para crear productos',
+            ], 403)
+        );
     }
 }

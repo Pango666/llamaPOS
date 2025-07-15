@@ -1,34 +1,27 @@
 <?php
-
 namespace App\Http\Controllers\API;
 
 use App\Http\Controllers\API\BaseApiController;
-use App\Http\Controllers\API\Traits\RoleCheck;
 use App\Services\ProductService;
 use App\Http\Requests\StoreProductRequest;
 use App\Http\Requests\UpdateProductRequest;
-use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Log;
 
 class ProductController extends BaseApiController
 {
-    use RoleCheck;
+    public function __construct(private ProductService $service)
+    {
+        $this->middleware(['auth:api','role:owner']);
+    }
 
-    public function __construct(private ProductService $service) {}
-
-    public function index(Request $request)
+    public function index()
     {
         try {
-            $rol = Auth::user()->roles->first();
-            if ($rol->name == "owner") {
-                $perPage = (int) $request->query('per_page', 15);
-                $data = $this->service->all($perPage);
-                return $this->success($data);
-            }else{
-                return $this->error('Acceso Denegado', 422);    
-            }
+            $products = $this->service->all();
+            return $this->success($products);
         } catch (\Exception $e) {
-            return $this->error('No se pudieron obtener productos', 422);
+            Log::error('ProductController@index error', ['msg'=>$e->getMessage()]);
+            return $this->error('No se pudieron obtener productos', 500);
         }
     }
 
@@ -38,7 +31,21 @@ class ProductController extends BaseApiController
             $product = $this->service->create($request->validated());
             return $this->success($product, 'Producto creado', 201);
         } catch (\Exception $e) {
+            Log::error('ProductController@store error', ['msg'=>$e->getMessage()]);
             return $this->error('Error al crear producto', 500);
+        }
+    }
+
+    public function show($id)
+    {
+        try {
+            $product = $this->service->find($id);
+            return $this->success($product);
+        } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
+            return $this->error('Producto no encontrada', 404);
+        } catch (\Exception $e) {
+            \Log::error('ProductController@show error', ['msg'=>$e->getMessage()]);
+            return $this->error('Error al obtener el producto', 500);
         }
     }
 
@@ -50,6 +57,7 @@ class ProductController extends BaseApiController
         } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
             return $this->error('Producto no encontrado', 404);
         } catch (\Exception $e) {
+            Log::error('ProductController@update error', ['msg'=>$e->getMessage()]);
             return $this->error('Error al actualizar producto', 500);
         }
     }
@@ -57,11 +65,13 @@ class ProductController extends BaseApiController
     public function destroy($id)
     {
         try {
-            $this->authorizeRole('owner');
             $this->service->delete($id);
             return $this->success(null, 'Producto eliminado', 204);
         } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
             return $this->error('Producto no encontrado', 404);
+        } catch (\Exception $e) {
+            Log::error('ProductController@destroy error', ['msg'=>$e->getMessage()]);
+            return $this->error('Error al eliminar producto', 500);
         }
     }
 }

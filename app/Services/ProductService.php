@@ -17,12 +17,19 @@ class ProductService
     {
         return Product::create($data);
     }
+
+    public function find(int $id): Product
+    {
+        return Product::findOrFail($id);
+    }
+
     public function update($id, array $data)
     {
         $p = Product::findOrFail($id);
         $p->update($data);
         return $p;
     }
+
     public function delete($id)
     {
         Product::findOrFail($id)->delete();

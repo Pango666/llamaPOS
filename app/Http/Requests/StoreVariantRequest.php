@@ -10,8 +10,10 @@ class StoreVariantRequest extends FormRequest
 {
     public function authorize(): bool
     {
-        // Solo owner puede crear variantes
-        return auth('api')->user()?->role === 'owner';
+        // Solo usuarios autenticados con rol 'owner'
+        return $this->user()
+            && method_exists($this->user(), 'hasRole')
+            && $this->user()->hasRole('owner');
     }
 
     public function rules(): array
