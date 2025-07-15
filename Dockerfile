@@ -14,6 +14,9 @@ RUN apt-get update \
  && docker-php-ext-install pdo pdo_pgsql zip \
  && rm -rf /var/lib/apt/lists/*
 
+# Instalar Composer en la imagen PHP
+COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
+
 WORKDIR /app
 
 # traemos vendor ya instalado y el resto del código
