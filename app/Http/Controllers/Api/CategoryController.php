@@ -7,6 +7,7 @@ use App\Services\CategoryService;
 use App\Http\Requests\StoreCategoryRequest;
 use App\Http\Requests\UpdateCategoryRequest;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Storage;
 
 class CategoryController extends BaseApiController
 {
@@ -32,7 +33,11 @@ class CategoryController extends BaseApiController
     public function store(StoreCategoryRequest $request)
     {
         try {
-            $category = $this->service->create($request->validated());
+            $data = $request->validated();
+            if ($request->hasFile('image')) {
+                $data['image_path'] = $request->file('image')->store('categories', 'public');
+            }
+            $category = $this->service->create($data);
             return $this->success($category, 'Categoría creada', 201);
         } catch (\Exception $e) {
             Log::error('CategoryController@store error', ['msg'=>$e->getMessage()]);
@@ -46,17 +51,26 @@ class CategoryController extends BaseApiController
             $category = $this->service->find($id);
             return $this->success($category);
         } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
-            return $this->error('Categoria no encontrada', 404);
+            return $this->error('Categoría no encontrada', 404);
         } catch (\Exception $e) {
-            \Log::error('CategoryController@show error', ['msg'=>$e->getMessage()]);
-            return $this->error('Error al obtener categoria', 500);
+            Log::error('CategoryController@show error', ['msg'=>$e->getMessage()]);
+            return $this->error('Error al obtener categoría', 500);
         }
     }
 
     public function update(UpdateCategoryRequest $request, $id)
     {
         try {
-            $category = $this->service->update($id, $request->validated());
+            $data = $request->validated();
+            if ($request->hasFile('image')) {
+                // Elimina imagen anterior si existe
+                $old = $this->service->find($id)['image_path'] ?? null;
+                if ($old) {
+                    Storage::disk('public')->delete($old);
+                }
+                $data['image_path'] = $request->file('image')->store('categories', 'public');
+            }
+            $category = $this->service->update($id, $data);
             return $this->success($category, 'Categoría actualizada');
         } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
             return $this->error('Categoría no encontrada', 404);
@@ -69,6 +83,10 @@ class CategoryController extends BaseApiController
     public function destroy($id)
     {
         try {
+            $category = $this->service->find($id);
+            if (!empty($category['image_path'])) {
+                Storage::disk('public')->delete($category['image_path']);
+            }
             $this->service->delete($id);
             return $this->success(null, 'Categoría eliminada', 204);
         } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {

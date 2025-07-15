@@ -10,7 +10,6 @@ class UpdateCategoryRequest extends FormRequest
 {
     public function authorize(): bool
     {
-        // Solo usuarios autenticados con rol 'owner'
         return $this->user()
             && method_exists($this->user(), 'hasRole')
             && $this->user()->hasRole('owner');
@@ -19,7 +18,8 @@ class UpdateCategoryRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'name' => 'sometimes|required|string|max:255',
+            'name'  => 'sometimes|required|string|max:255',
+            'image' => 'sometimes|nullable|image|mimes:jpg,jpeg,png,gif|max:2048',
         ];
     }
 
@@ -29,6 +29,9 @@ class UpdateCategoryRequest extends FormRequest
             'name.required' => 'El nombre es obligatorio si se proporciona.',
             'name.string'   => 'El nombre debe ser texto.',
             'name.max'      => 'El nombre no puede exceder 255 caracteres.',
+            'image.image'   => 'El archivo debe ser una imagen.',
+            'image.mimes'   => 'La imagen debe ser jpg, jpeg, png o gif.',
+            'image.max'     => 'La imagen no puede exceder los 2 MB.',
         ];
     }
 

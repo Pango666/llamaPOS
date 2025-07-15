@@ -20,7 +20,8 @@ class SaleController extends BaseApiController
     public function index(Request $request)
     {
         try {
-            $filters = $request->only('branch_id', 'date');
+            // Filtrado opcional por sucursal, fecha y cliente
+            $filters = $request->only('branch_id', 'date', 'client_id');
             $perPage = (int) $request->query('per_page', 15);
             $data = $this->service->all($filters, $perPage);
 
@@ -47,7 +48,13 @@ class SaleController extends BaseApiController
     public function store(StoreSaleRequest $request)
     {
         try {
-            $sale = $this->service->create($request->validated());
+            $data = $request->validated();
+            // Cliente opcional
+            if ($request->filled('client_id')) {
+                $data['client_id'] = $request->input('client_id');
+            }
+
+            $sale = $this->service->create($data);
             return $this->success($sale, 'Venta registrada', 201);
         } catch (\Exception $e) {
             Log::error('SaleController@store error', ['msg' => $e->getMessage()]);

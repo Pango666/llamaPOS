@@ -1,22 +1,23 @@
 <?php
-namespace Database\Seeders;
 
+namespace Database\Seeders;
 use Illuminate\Database\Seeder;
+use App\Models\Category;
 use App\Models\Product;
 use App\Models\ProductVariant;
-use App\Models\Category;
 
 class ProductAndVariantSeeder extends Seeder
 {
     public function run(): void
     {
-        $coffee = Category::where('name', 'Cafés')->first();
+        $coffee   = Category::where('name', 'Cafés')->first();
         $pastries = Category::where('name', 'Masitas')->first();
-        $drinks = Category::where('name', 'Bebidas Frías')->first();
+        $drinks   = Category::where('name', 'Bebidas Frías')->first();
 
         // Café Americano
         $americano = Product::firstOrCreate(
-            ['category_id' => $coffee->id, 'name' => 'Café Americano']
+            ['category_id' => $coffee->id, 'name' => 'Café Americano'],
+            ['price' => null]
         );
         ProductVariant::firstOrCreate(
             ['product_id' => $americano->id, 'name' => 'Grande'],
@@ -29,7 +30,8 @@ class ProductAndVariantSeeder extends Seeder
 
         // Croissant
         $croissant = Product::firstOrCreate(
-            ['category_id' => $pastries->id, 'name' => 'Croissant']
+            ['category_id' => $pastries->id, 'name' => 'Croissant'],
+            ['price' => null]
         );
         ProductVariant::firstOrCreate(
             ['product_id' => $croissant->id, 'name' => 'Unidad'],
@@ -38,7 +40,8 @@ class ProductAndVariantSeeder extends Seeder
 
         // Limonada
         $limonada = Product::firstOrCreate(
-            ['category_id' => $drinks->id, 'name' => 'Limonada']
+            ['category_id' => $drinks->id, 'name' => 'Limonada'],
+            ['price' => null]
         );
         ProductVariant::firstOrCreate(
             ['product_id' => $limonada->id, 'name' => '350 ml'],

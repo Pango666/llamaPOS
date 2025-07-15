@@ -5,6 +5,7 @@ use Illuminate\Database\Seeder;
 use App\Models\Sale;
 use App\Models\SaleItem;
 use App\Models\Branch;
+use App\Models\Client;
 use App\Models\User;
 use App\Models\ProductVariant;
 
@@ -12,24 +13,49 @@ class SaleSeeder extends Seeder
 {
     public function run(): void
     {
-        $branch = Branch::where('name', 'Ocheto Centro')->first();
-        $seller = User::role('seller')->where('branch_id', $branch->id)->first();
-        $variant = ProductVariant::first();
+        $branches = Branch::whereIn('name', ['Ocheto Centro', 'Ocheto Sur'])->get();
+        $clients  = Client::all();
 
-        $sale = Sale::create([
-            'branch_id' => $branch->id,
-            'user_id'   => $seller->id,
-            'total'     => $variant->price * 2,
-            'status'    => 'completed',
-            'notes'     => 'Venta de prueba'
-        ]);
+        foreach ($branches as $branch) {
+            $seller = User::role('seller')
+                          ->where('branch_id', $branch->id)
+                          ->first();
 
-        SaleItem::create([
-            'sale_id'             => $sale->id,
-            'product_variant_id'  => $variant->id,
-            'quantity'            => 2,
-            'price'               => $variant->price,
-            'total'               => $variant->price * 2,
-        ]);
+            for ($i = 1; $i <= 3; $i++) {
+                // Asignar cliente solo si hay clientes registrados
+                $client = null;
+                if ($i % 2 === 0 && $clients->isNotEmpty()) {
+                    $client = $clients->random();
+                }
+
+                $sale = Sale::create([
+                    'branch_id' => $branch->id,
+                    'user_id'   => $seller->id,
+                    'client_id' => $client?->id,
+                    'total'     => 0,
+                    'status'    => 'completed',
+                    'notes'     => 'Venta semilla ' . $i . ' en ' . $branch->name,
+                ]);
+
+                $variants = ProductVariant::inRandomOrder()
+                             ->take(rand(1, 2))
+                             ->get();
+
+                $total = 0;
+                foreach ($variants as $variant) {
+                    $quantity = rand(1, 3);
+                    $line = SaleItem::create([
+                        'sale_id'            => $sale->id,
+                        'product_variant_id' => $variant->id,
+                        'quantity'           => $quantity,
+                        'price'              => $variant->price,
+                        'total'              => $variant->price * $quantity,
+                    ]);
+                    $total += $line->total;
+                }
+
+                $sale->update(['total' => $total]);
+            }
+        }
     }
 }

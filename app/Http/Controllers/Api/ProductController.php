@@ -6,6 +6,7 @@ use App\Services\ProductService;
 use App\Http\Requests\StoreProductRequest;
 use App\Http\Requests\UpdateProductRequest;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Storage;
 
 class ProductController extends BaseApiController
 {
@@ -28,7 +29,13 @@ class ProductController extends BaseApiController
     public function store(StoreProductRequest $request)
     {
         try {
-            $product = $this->service->create($request->validated());
+            $data = $request->validated();
+
+            if ($request->hasFile('image')) {
+                $data['image_path'] = $request->file('image')->store('products', 'public');
+            }
+
+            $product = $this->service->create($data);
             return $this->success($product, 'Producto creado', 201);
         } catch (\Exception $e) {
             Log::error('ProductController@store error', ['msg'=>$e->getMessage()]);
@@ -42,9 +49,9 @@ class ProductController extends BaseApiController
             $product = $this->service->find($id);
             return $this->success($product);
         } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
-            return $this->error('Producto no encontrada', 404);
+            return $this->error('Producto no encontrado', 404);
         } catch (\Exception $e) {
-            \Log::error('ProductController@show error', ['msg'=>$e->getMessage()]);
+            Log::error('ProductController@show error', ['msg'=>$e->getMessage()]);
             return $this->error('Error al obtener el producto', 500);
         }
     }
@@ -52,7 +59,17 @@ class ProductController extends BaseApiController
     public function update(UpdateProductRequest $request, $id)
     {
         try {
-            $product = $this->service->update($id, $request->validated());
+            $data = $request->validated();
+
+            if ($request->hasFile('image')) {
+                $old = $this->service->find($id)['image_path'] ?? null;
+                if ($old) {
+                    Storage::disk('public')->delete($old);
+                }
+                $data['image_path'] = $request->file('image')->store('products', 'public');
+            }
+
+            $product = $this->service->update($id, $data);
             return $this->success($product, 'Producto actualizado');
         } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
             return $this->error('Producto no encontrado', 404);
@@ -65,6 +82,10 @@ class ProductController extends BaseApiController
     public function destroy($id)
     {
         try {
+            $product = $this->service->find($id);
+            if (!empty($product['image_path'])) {
+                Storage::disk('public')->delete($product['image_path']);
+            }
             $this->service->delete($id);
             return $this->success(null, 'Producto eliminado', 204);
         } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
