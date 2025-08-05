@@ -2,7 +2,7 @@
 
 namespace App\Http\Controllers\Api;
 
-use App\Http\Controllers\API\BaseApiController;
+use App\Http\Controllers\Api\BaseApiController;
 use App\Services\SaleService;
 use App\Http\Requests\StoreSaleRequest;
 use Illuminate\Http\Request;

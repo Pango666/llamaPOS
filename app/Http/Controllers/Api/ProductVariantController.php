@@ -2,7 +2,7 @@
 
 namespace App\Http\Controllers\Api;
 
-use App\Http\Controllers\API\BaseApiController;
+use App\Http\Controllers\Api\BaseApiController;
 use App\Services\VariantService;
 use App\Http\Requests\StoreVariantRequest;
 use App\Http\Requests\UpdateVariantRequest;
