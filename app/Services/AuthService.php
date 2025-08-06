@@ -60,12 +60,22 @@ class AuthService
 
     protected function respondWithToken(string $token): array
     {
+        $user = JWTAuth::user();
+
         return [
             'access_token' => $token,
             'token_type'   => 'bearer',
-            // Aquí usamos JWTAuth para obtener el TTL
             'expires_in'   => JWTAuth::factory()->getTTL() * 60,
-            'user'         => JWTAuth::user(),
+            'user' => [
+                'id'         => $user->id,
+                'name'       => $user->name,
+                'email'      => $user->email,
+                // Tomamos el primer rol asignado con Spatie
+                'role'       => $user->getRoleNames()->first() ?? '',
+                'branch_id'  => $user->branch_id,
+                'created_at' => $user->created_at->toDateTimeString(),
+                'updated_at' => $user->updated_at->toDateTimeString(),
+            ],
         ];
     }
 }
