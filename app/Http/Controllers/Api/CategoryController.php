@@ -6,6 +6,8 @@ use App\Http\Controllers\Api\BaseApiController;
 use App\Services\CategoryService;
 use App\Http\Requests\StoreCategoryRequest;
 use App\Http\Requests\UpdateCategoryRequest;
+use App\Models\Category;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 
@@ -13,7 +15,7 @@ class CategoryController extends BaseApiController
 {
     public function __construct(private CategoryService $service)
     {
-        $this->middleware(['auth:api','role:owner']);
+        $this->middleware(['auth:api', 'role:owner']);
     }
 
     public function index()
@@ -40,7 +42,7 @@ class CategoryController extends BaseApiController
             $category = $this->service->create($data);
             return $this->success($category, 'Categoría creada', 201);
         } catch (\Exception $e) {
-            Log::error('CategoryController@store error', ['msg'=>$e->getMessage()]);
+            Log::error('CategoryController@store error', ['msg' => $e->getMessage()]);
             return $this->error('Error al crear categoría', 500);
         }
     }
@@ -53,7 +55,7 @@ class CategoryController extends BaseApiController
         } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
             return $this->error('Categoría no encontrada', 404);
         } catch (\Exception $e) {
-            Log::error('CategoryController@show error', ['msg'=>$e->getMessage()]);
+            Log::error('CategoryController@show error', ['msg' => $e->getMessage()]);
             return $this->error('Error al obtener categoría', 500);
         }
     }
@@ -75,7 +77,7 @@ class CategoryController extends BaseApiController
         } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
             return $this->error('Categoría no encontrada', 404);
         } catch (\Exception $e) {
-            Log::error('CategoryController@update error', ['msg'=>$e->getMessage()]);
+            Log::error('CategoryController@update error', ['msg' => $e->getMessage()]);
             return $this->error('Error al actualizar categoría', 500);
         }
     }
@@ -92,8 +94,35 @@ class CategoryController extends BaseApiController
         } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
             return $this->error('Categoría no encontrada', 404);
         } catch (\Exception $e) {
-            Log::error('CategoryController@destroy error', ['msg'=>$e->getMessage()]);
+            Log::error('CategoryController@destroy error', ['msg' => $e->getMessage()]);
             return $this->error('Error al eliminar categoría', 500);
         }
+    }
+
+    public function catalog(Request $request)
+    {
+        $q           = trim((string) $request->query('q', ''));
+        $categoryId  = $request->query('category_id');
+        $withEmpty   = (bool) $request->boolean('with_empty', false);
+
+        $categories = Category::query()
+            ->when($categoryId, fn($qq) => $qq->where('id', $categoryId))
+            ->with(['products' => function ($qp) use ($q) {
+                $qp->where('is_active', true)
+                    ->when($q, function ($qpp) use ($q) {
+                        $qpp->where('name', 'like', "%{$q}%")
+                            ->orWhereHas('variants', fn($v) => $v->where('name', 'like', "%{$q}%"));
+                    })
+                    ->with(['variants' => fn($v) => $v->where('is_active', true)])
+                    ->orderBy('name');
+            }])
+            ->orderBy('name')
+            ->get();
+
+        if (!$withEmpty) {
+            $categories = $categories->filter(fn($c) => $c->products->count() > 0)->values();
+        }
+
+        return $this->success($categories);
     }
 }

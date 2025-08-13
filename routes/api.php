@@ -27,9 +27,11 @@ Route::middleware('auth:api')->group(function () {
     // Ventas (tanto owner como seller pueden index y show)
     Route::get('sales',      [SaleController::class, 'index']);
     Route::get('sales/{id}', [SaleController::class, 'show']);
+
+    Route::get('catalog',         [CategoryController::class, 'catalog']);
     // Crear venta para roles owner o seller
     Route::post('sales', [SaleController::class, 'store'])
-         ->middleware('role:owner|seller');
+        ->middleware('role:owner|seller');
 
     // Rutas de administración (solo owner)
     Route::middleware('role:owner')->group(function () {

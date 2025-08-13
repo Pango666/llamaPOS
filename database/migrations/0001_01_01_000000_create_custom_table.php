@@ -32,14 +32,14 @@ return new class extends Migration
             $table->softDeletes();
 
             $table->foreign('branch_id')
-                  ->references('id')->on('branches')
-                  ->onDelete('set null');
+                ->references('id')->on('branches')
+                ->onDelete('set null');
         });
 
         Schema::create('clients', function (Blueprint $table) {
             $table->id();
-            $table->string('name'); 
-            $table->string('documento')->nullable()->unique(); 
+            $table->string('name');
+            $table->string('documento')->nullable()->unique();
             $table->string('email')->nullable();
             $table->string('phone')->nullable();
             $table->string('address')->nullable();
@@ -107,7 +107,6 @@ return new class extends Migration
             // Evitar duplicar la misma variante en una venta
             $table->unique(['sale_id', 'product_variant_id']);
         });
-        
     }
 
     /**
@@ -115,6 +114,13 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::dropIfExists('custom');
+        Schema::dropIfExists('sale_items');
+        Schema::dropIfExists('sales');
+        Schema::dropIfExists('product_variants');
+        Schema::dropIfExists('products');
+        Schema::dropIfExists('categories');
+        Schema::dropIfExists('clients');
+        Schema::dropIfExists('users');
+        Schema::dropIfExists('branches');
     }
 };
