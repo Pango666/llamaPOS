@@ -10,7 +10,6 @@ class StoreSaleRequest extends FormRequest
 {
     public function authorize(): bool
     {
-        // Solo seller o owner pueden registrar ventas
         return $this->user()
             && method_exists($this->user(), 'hasAnyRole')
             && $this->user()->hasAnyRole('seller', 'owner');
@@ -19,25 +18,26 @@ class StoreSaleRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'branch_id'           => 'required|exists:branches,id',
-            'items'               => 'required|array|min:1',
-            'items.*.variant_id'  => 'required|exists:product_variants,id',
-            'items.*.quantity'    => 'required|integer|min:1',
+            'branch_id'          => 'required|exists:branches,id',
+            'items'              => 'required|array|min:1',
+            'items.*.product_id' => 'required|exists:products,id',
+            'items.*.quantity'   => 'required|integer|min:1',
+            'client_id'          => 'nullable|exists:clients,id',
         ];
     }
 
     public function messages(): array
     {
         return [
-            'branch_id.required'          => 'La sucursal es obligatoria.',
-            'branch_id.exists'            => 'La sucursal no existe.',
-            'items.required'              => 'Debe enviar al menos un ítem.',
-            'items.array'                 => 'Los ítems deben ser un arreglo.',
-            'items.*.variant_id.required' => 'Cada ítem necesita una variante.',
-            'items.*.variant_id.exists'   => 'La variante no existe.',
-            'items.*.quantity.required'   => 'La cantidad es obligatoria.',
-            'items.*.quantity.integer'    => 'La cantidad debe ser un número entero.',
-            'items.*.quantity.min'        => 'La cantidad debe ser al menos 1.',
+            'branch_id.required'           => 'La sucursal es obligatoria.',
+            'branch_id.exists'             => 'La sucursal no existe.',
+            'items.required'               => 'Debe enviar al menos un ítem.',
+            'items.array'                  => 'Los ítems deben ser un arreglo.',
+            'items.*.product_id.required'  => 'Cada ítem necesita un producto.',
+            'items.*.product_id.exists'    => 'El producto no existe.',
+            'items.*.quantity.required'    => 'La cantidad es obligatoria.',
+            'items.*.quantity.integer'     => 'La cantidad debe ser un número entero.',
+            'items.*.quantity.min'         => 'La cantidad debe ser al menos 1.',
         ];
     }
 

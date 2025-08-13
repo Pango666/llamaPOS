@@ -2,111 +2,94 @@
 
 namespace App\Services;
 
+use App\Models\Product;
 use App\Models\Sale;
 use App\Models\SaleItem;
 use App\Models\ProductVariant;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 
 class SaleService
 {
-    public function all(array $filters = [], int $perPage = 15): array
+    public function all(array $filters, int $perPage = 15)
     {
-        $paginator = Sale::with(['items.variant.product', 'client'])
-            ->when(!empty($filters['branch_id']), fn($q) => $q->where('branch_id', $filters['branch_id']))
-            ->when(!empty($filters['client_id']), fn($q) => $q->where('client_id', $filters['client_id']))
-            ->when(!empty($filters['date']), fn($q) => $q->whereDate('created_at', $filters['date']))
-            ->orderByDesc('created_at')
-            ->paginate($perPage);
+        $q = Sale::query()->with(['items.productVariant.product', 'user', 'branch']);
 
-        $sales = $paginator->getCollection()->map(fn($sale) => [
-            'id'          => $sale->id,
-            'branch_id'   => $sale->branch_id,
-            'client_id'   => $sale->client_id,
-            'client_name' => $sale->client?->name,
-            'user_id'     => $sale->user_id,
-            'total'       => $sale->total,
-            'status'      => $sale->status,
-            'notes'       => $sale->notes,
-            'created_at'  => $sale->created_at->toDateTimeString(),
-            'items'       => $sale->items->map(fn($item) => [
-                'product_id'   => $item->variant->product->id,
-                'product_name' => $item->variant->product->name,
-                'variant_id'   => $item->variant->id,
-                'variant_name' => $item->variant->name,
-                'price'        => $item->price,
-                'quantity'     => $item->quantity,
-                'subtotal'     => $item->total,
-            ])->toArray(),
-        ])->toArray();
+        if (!empty($filters['date'])) {
+            $q->whereDate('created_at', $filters['date']);
+        }
+        if (!empty($filters['branch_id'])) {
+            $q->where('branch_id', $filters['branch_id']);
+        }
+        if (!empty($filters['client_id'])) {
+            $q->where('client_id', $filters['client_id']);
+        }
 
-        $meta = [
-            'current_page' => $paginator->currentPage(),
-            'per_page'     => $paginator->perPage(),
-            'last_page'    => $paginator->lastPage(),
-            'total'        => $paginator->total(),
-        ];
-
-        return ['sales' => $sales, 'meta' => $meta];
+        return $q->orderByDesc('created_at')->paginate($perPage);
     }
 
-    public function find(int $id): array
+    public function find(int $id)
     {
-        $sale = Sale::with(['items.variant.product', 'client'])->findOrFail($id);
-
-        return [
-            'id'          => $sale->id,
-            'branch_id'   => $sale->branch_id,
-            'client_id'   => $sale->client_id,
-            'client_name' => $sale->client?->name,
-            'user_id'     => $sale->user_id,
-            'total'       => $sale->total,
-            'status'      => $sale->status,
-            'notes'       => $sale->notes,
-            'created_at'  => $sale->created_at->toDateTimeString(),
-            'items'       => $sale->items->map(fn($item) => [
-                'product_id'   => $item->variant->product->id,
-                'product_name' => $item->variant->product->name,
-                'variant_id'   => $item->variant->id,
-                'variant_name' => $item->variant->name,
-                'price'        => $item->price,
-                'quantity'     => $item->quantity,
-                'subtotal'     => $item->total,
-            ])->toArray(),
-        ];
+        return Sale::with(['items.productVariant.product', 'user', 'branch'])
+            ->findOrFail($id);
     }
 
-    public function create(array $data): array
+    public function create(array $data)
     {
         return DB::transaction(function () use ($data) {
-            $saleData = [
-                'branch_id' => $data['branch_id'],
-                'user_id'   => auth('api')->id(),
-                'total'     => 0,
-                'status'    => $data['status'] ?? 'completed',
-                'notes'     => $data['notes'] ?? null,
-            ];
-
-            // Asociar cliente si se envió client_id
-            if (!empty($data['client_id'])) {
-                $saleData['client_id'] = $data['client_id'];
-            }
-
-            $sale = Sale::create($saleData);
+            $sale = new Sale();
+            $sale->branch_id = $data['branch_id'];
+            $sale->user_id   = auth()->id();
+            $sale->client_id = $data['client_id'] ?? null;
+            $sale->status    = 'completed';
+            $sale->total     = 0;
+            $sale->save();
 
             $total = 0;
-            foreach ($data['items'] as $i) {
-                $variant = ProductVariant::findOrFail($i['variant_id']);
-                $line = SaleItem::create([
+
+            foreach ($data['items'] as $line) {
+                $product  = Product::where('is_active', true)->findOrFail($line['product_id']);
+                $quantity = (int) $line['quantity'];
+
+                // Tomamos precio del producto (la demo no usa variantes)
+                $price = $product->price;
+
+                if ($price === null) {
+                    // Si no tiene precio, detén el registro
+                    throw ValidationException::withMessages([
+                        'items' => ["El producto {$product->name} no tiene precio configurado."],
+                    ]);
+                }
+
+                // Para satisfacer la FK a product_variants, usa/crea una "variante única"
+                $variant = ProductVariant::where('product_id', $product->id)
+                    ->where('name', 'Única')
+                    ->first();
+
+                if (!$variant) {
+                    $variant = ProductVariant::create([
+                        'product_id' => $product->id,
+                        'name'       => 'Única',
+                        'price'      => $price,
+                        'is_active'  => true,
+                    ]);
+                }
+
+                $lineTotal = (float) $price * $quantity;
+
+                SaleItem::create([
                     'sale_id'            => $sale->id,
                     'product_variant_id' => $variant->id,
-                    'quantity'           => $i['quantity'],
-                    'price'              => $variant->price,
-                    'total'              => $variant->price * $i['quantity'],
+                    'quantity'           => $quantity,
+                    'price'              => $price,
+                    'total'              => $lineTotal,
                 ]);
-                $total += $line->total;
+
+                $total += $lineTotal;
             }
 
-            $sale->update(['total' => $total]);
+            $sale->total = $total;
+            $sale->save();
 
             return $this->find($sale->id);
         });
