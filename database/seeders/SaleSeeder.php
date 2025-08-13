@@ -1,32 +1,55 @@
 <?php
+
 namespace Database\Seeders;
 
 use Illuminate\Database\Seeder;
+use Illuminate\Support\Facades\Schema; // ← AÑADIR
+use Illuminate\Support\Carbon;
 use App\Models\Sale;
 use App\Models\SaleItem;
 use App\Models\Branch;
 use App\Models\Client;
 use App\Models\User;
-use App\Models\ProductVariant;
+use App\Models\Product;
 
 class SaleSeeder extends Seeder
 {
     public function run(): void
     {
         $branches = Branch::whereIn('name', ['Ocheto Centro', 'Ocheto Sur'])->get();
-        $clients  = Client::all();
+        if ($branches->isEmpty()) {
+            $branches = Branch::all();
+        }
+        if ($branches->isEmpty()) {
+            $this->command->warn('SaleSeeder: no hay sucursales; me salto la siembra de ventas.');
+            return;
+        }
+
+        $clients = Client::all();
+
+        // Usa Schema::hasColumn en vez de schema()
+        $productsBaseQuery = Product::query();
+        if (Schema::hasColumn('products', 'is_active')) {
+            $productsBaseQuery->where('is_active', true);
+        }
+        if (!$productsBaseQuery->exists()) {
+            $this->command->warn('SaleSeeder: no hay productos; me salto la siembra de ventas.');
+            return;
+        }
 
         foreach ($branches as $branch) {
-            $seller = User::role('seller')
-                          ->where('branch_id', $branch->id)
-                          ->first();
+            $seller = User::role('seller')->where('branch_id', $branch->id)->first()
+                   ?? User::role('owner')->first()
+                   ?? User::first();
+
+            if (!$seller) {
+                $this->command->warn("SaleSeeder: no hay usuarios para la sucursal {$branch->name}.");
+                continue;
+            }
 
             for ($i = 1; $i <= 3; $i++) {
-                // Asignar cliente solo si hay clientes registrados
-                $client = null;
-                if ($i % 2 === 0 && $clients->isNotEmpty()) {
-                    $client = $clients->random();
-                }
+                $client = ($i % 2 === 0 && $clients->isNotEmpty()) ? $clients->random() : null;
+                $createdAt = Carbon::now()->subDays(rand(0, 3))->subMinutes(rand(0, 1440));
 
                 $sale = Sale::create([
                     'branch_id' => $branch->id,
@@ -35,26 +58,32 @@ class SaleSeeder extends Seeder
                     'total'     => 0,
                     'status'    => 'completed',
                     'notes'     => 'Venta semilla ' . $i . ' en ' . $branch->name,
+                    'created_at'=> $createdAt,
+                    'updated_at'=> $createdAt,
                 ]);
 
-                $variants = ProductVariant::inRandomOrder()
-                             ->take(rand(1, 2))
-                             ->get();
+                $products = (clone $productsBaseQuery)->inRandomOrder()->take(rand(1, 3))->get();
 
-                $total = 0;
-                foreach ($variants as $variant) {
-                    $quantity = rand(1, 3);
-                    $line = SaleItem::create([
-                        'sale_id'            => $sale->id,
-                        'product_variant_id' => $variant->id,
-                        'quantity'           => $quantity,
-                        'price'              => $variant->price,
-                        'total'              => $variant->price * $quantity,
+                $total = 0.0;
+                foreach ($products as $product) {
+                    $qty   = rand(1, 3);
+                    $price = (float) ($product->price ?? 0);
+                    $lineTotal = $price * $qty;
+
+                    SaleItem::create([
+                        'sale_id'    => $sale->id,
+                        'product_id' => $product->id, // ← sin variantes
+                        'quantity'   => $qty,
+                        'price'      => $price,
+                        'total'      => $lineTotal,
+                        'created_at' => $createdAt,
+                        'updated_at' => $createdAt,
                     ]);
-                    $total += $line->total;
+
+                    $total += $lineTotal;
                 }
 
-                $sale->update(['total' => $total]);
+                $sale->update(['total' => $total, 'updated_at' => $createdAt]);
             }
         }
     }
