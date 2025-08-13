@@ -9,20 +9,12 @@ class SaleItem extends Model
 {
     use HasFactory;
 
-    protected $fillable = [
-        'sale_id',
-        'product_id',     // ← sin variantes
-        'quantity',
-        'price',          // precio unitario
-        'total',          // total de la línea (price * quantity)
-    ];
+    protected $fillable = ['sale_id', 'product_id', 'quantity', 'price', 'total'];
 
     public function sale()
     {
         return $this->belongsTo(Sale::class);
     }
-
-    // ← relación correcta
     public function product()
     {
         return $this->belongsTo(Product::class);

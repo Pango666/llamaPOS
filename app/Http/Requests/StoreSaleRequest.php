@@ -18,19 +18,17 @@ class StoreSaleRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'branch_id'          => 'required|exists:branches,id',
-            'items'              => 'required|array|min:1',
+            'branch_id'        => 'required|exists:branches,id',
+            'items'            => 'required|array|min:1',
             'items.*.product_id' => 'required|exists:products,id',
-            'items.*.quantity'   => 'required|integer|min:1',
+            'items.*.quantity' => 'required|integer|min:1',
 
-            // NUEVO: datos cliente/facturación (opcionales)
-            'billing_name'       => 'nullable|string|max:190',
-            'billing_address'    => 'nullable|string|max:255',
-            'customer_name'      => 'nullable|string|max:190',
-            'customer_phone'     => 'nullable|string|max:40',
-
-            // opcional: si mandas id de cliente directo
-            'client_id'          => 'nullable|exists:clients,id',
+            // cliente opcional
+            'client_id'        => 'nullable|exists:clients,id',
+            'client_name'      => 'nullable|string|max:255',
+            'client_phone'     => 'nullable|string|max:50',
+            'client_documento' => 'nullable|string|max:100',
+            'client_address'   => 'nullable|string|max:255',
         ];
     }
 

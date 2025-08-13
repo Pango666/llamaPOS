@@ -16,93 +16,95 @@ class SaleService
     public function create(array $data)
     {
         return DB::transaction(function () use ($data) {
-            $userId   = auth()->id();
-            $branchId = (int)$data['branch_id'];
-
-            // ---- Cliente (opcional): crear o reutilizar
+            // resolver cliente
             $clientId = $data['client_id'] ?? null;
 
-            if (!$clientId) {
-                $hasClientData = !empty($data['customer_name']) || !empty($data['customer_phone']);
-                if ($hasClientData) {
-                    // Busca por teléfono si viene; si no, crea por nombre
-                    $lookup = [];
-                    if (!empty($data['customer_phone'])) {
-                        $lookup['phone'] = $data['customer_phone'];
-                    } else {
-                        $lookup['name']  = $data['customer_name'];
-                    }
+            if (!$clientId && (
+                !empty($data['client_documento']) ||
+                !empty($data['client_name'])
+            )) {
+                $client = Client::query()
+                    ->when(
+                        !empty($data['client_documento']),
+                        fn($q) =>
+                        $q->where('documento', $data['client_documento'])
+                    )
+                    ->first();
 
-                    $client = Client::firstOrCreate(
-                        $lookup,
-                        [
-                            'name'    => $data['customer_name']   ?? 'Cliente',
-                            'phone'   => $data['customer_phone']  ?? null,
-                            'address' => $data['billing_address'] ?? null,
-                            'email'   => null,
-                        ]
-                    );
-                    $clientId = $client->id;
+                if (!$client) {
+                    $client = Client::create([
+                        'name'      => $data['client_name']      ?? 'Cliente',
+                        'documento' => $data['client_documento'] ?? null,
+                        'phone'     => $data['client_phone']     ?? null,
+                        'address'   => $data['client_address']   ?? null,
+                        'email'     => null,
+                    ]);
+                } else {
+                    // actualizar datos si llegaron
+                    $client->fill([
+                        'name'    => $data['client_name']   ?? $client->name,
+                        'phone'   => $data['client_phone']  ?? $client->phone,
+                        'address' => $data['client_address'] ?? $client->address,
+                    ])->save();
                 }
+
+                $clientId = $client->id;
             }
 
-            // ---- Crear venta base
             $sale = Sale::create([
-                'branch_id' => $branchId,
-                'user_id'   => $userId,
+                'branch_id' => $data['branch_id'],
+                'user_id'   => auth()->id(),
                 'client_id' => $clientId,
                 'total'     => 0,
                 'status'    => 'completed',
-                'notes'     => !empty($data['billing_name'])
-                    ? ('Factura: ' . $data['billing_name'])
-                    : null,
+                'notes'     => $data['notes'] ?? null,
             ]);
 
-            // ---- Ítems
             $total = 0;
             foreach ($data['items'] as $line) {
-                $product  = Product::findOrFail((int)$line['product_id']);
-                $qty      = max(1, (int)$line['quantity']);
-                $price    = (float)($product->price ?? 0);
-                $subtotal = $price * $qty;
+                $price = (float) optional(\App\Models\Product::find($line['product_id']))->price ?: 0;
+                $qty   = (int) $line['quantity'];
 
-                SaleItem::create([
+                $item = SaleItem::create([
                     'sale_id'    => $sale->id,
-                    'product_id' => $product->id,
+                    'product_id' => $line['product_id'],
                     'quantity'   => $qty,
                     'price'      => $price,
-                    'total'      => $subtotal,
+                    'total'      => $price * $qty,
                 ]);
 
-                $total += $subtotal;
+                $total += $item->total;
             }
 
             $sale->update(['total' => $total]);
 
-            return $this->find($sale->id);
+            return $this->find($sale->id); // regresa con relaciones
         });
     }
 
-    public function all(array $filters = [], int $perPage = 15)
+    public function all(array $filters, int $perPage = 15)
     {
-        $q = Sale::with(['user', 'branch', 'client', 'items.product'])
-            ->latest();
+        $q = Sale::with([
+            'client:id,name,documento,phone,address',
+            'user:id,name',
+            'branch:id,name',
+            'items.product:id,name'
+        ])->latest();
 
-        if (!empty($filters['branch_id'])) {
-            $q->where('branch_id', $filters['branch_id']);
-        }
-        if (!empty($filters['date'])) { // YYYY-mm-dd
-            $q->whereDate('created_at', $filters['date']);
-        }
-        if (!empty($filters['user_id'])) {
-            $q->where('user_id', $filters['user_id']);
-        }
+        if (!empty($filters['branch_id'])) $q->where('branch_id', $filters['branch_id']);
+        if (!empty($filters['date']))      $q->whereDate('created_at', $filters['date']);
+        if (!empty($filters['client_id'])) $q->where('client_id', $filters['client_id']);
 
         return $q->paginate($perPage);
     }
 
     public function find(int $id)
     {
-        return Sale::with(['user', 'branch', 'client', 'items.product'])->findOrFail($id);
+        return Sale::with([
+            'client:id,name,documento,phone,address',
+            'user:id,name',
+            'branch:id,name',
+            'items.product:id,name'
+        ])->findOrFail($id);
     }
 }
