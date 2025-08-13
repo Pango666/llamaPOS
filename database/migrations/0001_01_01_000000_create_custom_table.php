@@ -105,7 +105,7 @@ return new class extends Migration
             $table->timestamps();
 
             // Evitar duplicar la misma variante en una venta
-            $table->unique(['sale_id', 'product_variant_id']);
+            $table->unique(['sale_id', 'product_id']);
         });
     }
 
