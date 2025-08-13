@@ -67,5 +67,12 @@ Route::middleware('auth:api')->group(function () {
         Route::get('reports/top-products',    [ReportController::class, 'topProducts']);
         Route::get('reports/daily-sales',     [ReportController::class, 'dailySales']);
         Route::get('reports/top-product-branch', [ReportController::class, 'topProductByBranch']);
+
+        //usuarios desde admin
+        Route::get('users',        [UserController::class, 'index']);
+        Route::post('users',       [UserController::class, 'store']);
+        Route::get('users/{id}',   [UserController::class, 'show']);
+        Route::put('users/{id}',   [UserController::class, 'update']);
+        Route::delete('users/{id}',[UserController::class, 'destroy']);
     });
 });
