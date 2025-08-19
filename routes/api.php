@@ -34,10 +34,12 @@ Route::middleware('auth:api')->group(function () {
     Route::post('sales', [SaleController::class, 'store'])
         ->middleware('role:owner|seller');
 
+    Route::get('branches',[BranchController::class, 'index'])
+        ->middleware('role:owner|seller');
     // Rutas de administración (solo owner)
     Route::middleware('role:owner')->group(function () {
         // Sucursales CRUD
-        Route::get('branches',          [BranchController::class, 'index']);
+        
         Route::post('branches',         [BranchController::class, 'store']);
         Route::get('branches/{id}',     [BranchController::class, 'show']);
         Route::put('branches/{id}',     [BranchController::class, 'update']);
