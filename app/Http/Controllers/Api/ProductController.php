@@ -6,8 +6,15 @@ use App\Http\Controllers\Api\BaseApiController;
 use App\Services\ProductService;
 use App\Http\Requests\StoreProductRequest;
 use App\Http\Requests\UpdateProductRequest;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
+
+// Intervention Image v3
+use Intervention\Image\ImageManager;
+use Intervention\Image\Drivers\Gd\Driver;
+use Intervention\Image\Encoders\WebpEncoder;
 
 class ProductController extends BaseApiController
 {
@@ -19,12 +26,9 @@ class ProductController extends BaseApiController
     public function index()
     {
         try {
-            $products = $this->service->all();
-
-            // (Opcional) adjuntar URL pública si tienes AWS_URL configurado
-            $products = collect($products)->map(function ($p) {
+            $products = collect($this->service->all())->map(function ($p) {
                 if (!empty($p['image_path'])) {
-                    $p['image_url'] = Storage::disk('s3')->url($p['image_path']);
+                    $p['image_url'] = $this->publicUrl($p['image_path']);
                 }
                 return $p;
             });
@@ -42,15 +46,13 @@ class ProductController extends BaseApiController
             $data = $request->validated();
 
             if ($request->hasFile('image')) {
-                // Guarda en R2 (disco s3). Usa nombre hash por defecto
-                $data['image_path'] = $request->file('image')->store('products', 's3');
+                $data['image_path'] = $this->storeAsWebpToR2($request->file('image'), 'products');
             }
 
             $product = $this->service->create($data);
 
-            // (Opcional) añade la URL pública al response
             if (!empty($product['image_path'])) {
-                $product['image_url'] = Storage::disk('s3')->url($product['image_path']);
+                $product['image_url'] = $this->publicUrl($product['image_path']);
             }
 
             return $this->success($product, 'Producto creado', 201);
@@ -65,7 +67,7 @@ class ProductController extends BaseApiController
         try {
             $product = $this->service->find($id);
             if (!empty($product['image_path'])) {
-                $product['image_url'] = Storage::disk('s3')->url($product['image_path']);
+                $product['image_url'] = $this->publicUrl($product['image_path']);
             }
             return $this->success($product);
         } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
@@ -84,23 +86,21 @@ class ProductController extends BaseApiController
             if ($request->hasFile('image')) {
                 $old = $this->service->find($id)['image_path'] ?? null;
 
-                // Borra anterior en el disco que corresponda
                 if ($old) {
                     if (Storage::disk('s3')->exists($old)) {
                         Storage::disk('s3')->delete($old);
                     } elseif (Storage::disk('public')->exists($old)) {
-                        // por si tienes imágenes antiguas en local
-                        Storage::disk('public')->delete($old);
+                        Storage::disk('public')->delete($old); // por si hay legacy en local
                     }
                 }
 
-                $data['image_path'] = $request->file('image')->store('products', 's3');
+                $data['image_path'] = $this->storeAsWebpToR2($request->file('image'), 'products');
             }
 
             $product = $this->service->update($id, $data);
 
             if (!empty($product['image_path'])) {
-                $product['image_url'] = Storage::disk('s3')->url($product['image_path']);
+                $product['image_url'] = $this->publicUrl($product['image_path']);
             }
 
             return $this->success($product, 'Producto actualizado');
@@ -134,5 +134,39 @@ class ProductController extends BaseApiController
             Log::error('ProductController@destroy error', ['msg' => $e->getMessage()]);
             return $this->error('Error al eliminar producto', 500);
         }
+    }
+
+    /* ========== Helpers ========== */
+
+    /**
+     * Convierte a WebP (calidad 82) y sube a R2 (disk s3).
+     * Retorna la key guardada, p.ej. "products/abc.webp".
+     */
+    private function storeAsWebpToR2(UploadedFile $file, string $dir): string
+    {
+        $manager = new ImageManager(new Driver());
+
+        $image = $manager->read($file->getPathname())
+                         ->encode(new WebpEncoder(quality: 82));
+
+        $filename = Str::uuid()->toString() . '.webp';
+        $key = trim($dir, '/').'/'.$filename;
+
+        Storage::disk('s3')->put($key, (string) $image, [
+            'visibility'   => 'public',
+            'ContentType'  => 'image/webp',
+            'CacheControl' => 'public, max-age=31536000, immutable',
+        ]);
+
+        return $key;
+    }
+
+    /**
+     * Construye la URL pública usando AWS_URL (R2 public bucket URL).
+     */
+    private function publicUrl(string $path): string
+    {
+        $base = rtrim(config('filesystems.disks.s3.url') ?: env('AWS_URL', ''), '/');
+        return $base . '/' . ltrim($path, '/');
     }
 }

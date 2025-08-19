@@ -8,8 +8,15 @@ use App\Http\Requests\StoreCategoryRequest;
 use App\Http\Requests\UpdateCategoryRequest;
 use App\Models\Category;
 use Illuminate\Http\Request;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
+
+// Intervention Image v3
+use Intervention\Image\ImageManager;
+use Intervention\Image\Drivers\Gd\Driver;
+use Intervention\Image\Encoders\WebpEncoder;
 
 class CategoryController extends BaseApiController
 {
@@ -21,11 +28,9 @@ class CategoryController extends BaseApiController
     public function index()
     {
         try {
-            $categories = $this->service->all();
-
-            $categories = collect($categories)->map(function ($c) {
+            $categories = collect($this->service->all())->map(function ($c) {
                 if (!empty($c['image_path'])) {
-                    $c['image_url'] = Storage::disk('s3')->url($c['image_path']);
+                    $c['image_url'] = $this->publicUrl($c['image_path']);
                 }
                 return $c;
             });
@@ -46,13 +51,13 @@ class CategoryController extends BaseApiController
             $data = $request->validated();
 
             if ($request->hasFile('image')) {
-                $data['image_path'] = $request->file('image')->store('categories', 's3');
+                $data['image_path'] = $this->storeAsWebpToR2($request->file('image'), 'categories');
             }
 
             $category = $this->service->create($data);
 
             if (!empty($category['image_path'])) {
-                $category['image_url'] = Storage::disk('s3')->url($category['image_path']);
+                $category['image_url'] = $this->publicUrl($category['image_path']);
             }
 
             return $this->success($category, 'Categoría creada', 201);
@@ -67,7 +72,7 @@ class CategoryController extends BaseApiController
         try {
             $category = $this->service->find($id);
             if (!empty($category['image_path'])) {
-                $category['image_url'] = Storage::disk('s3')->url($category['image_path']);
+                $category['image_url'] = $this->publicUrl($category['image_path']);
             }
             return $this->success($category);
         } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
@@ -94,13 +99,13 @@ class CategoryController extends BaseApiController
                     }
                 }
 
-                $data['image_path'] = $request->file('image')->store('categories', 's3');
+                $data['image_path'] = $this->storeAsWebpToR2($request->file('image'), 'categories');
             }
 
             $category = $this->service->update($id, $data);
 
             if (!empty($category['image_path'])) {
-                $category['image_url'] = Storage::disk('s3')->url($category['image_path']);
+                $category['image_url'] = $this->publicUrl($category['image_path']);
             }
 
             return $this->success($category, 'Categoría actualizada');
@@ -160,14 +165,40 @@ class CategoryController extends BaseApiController
             $categories = $categories->filter(fn($c) => $c->products->count() > 0)->values();
         }
 
-        // (Opcional) agrega URL pública de imagen
         $categories->transform(function ($c) {
             if (!empty($c->image_path)) {
-                $c->image_url = Storage::disk('s3')->url($c->image_path);
+                $c->image_url = $this->publicUrl($c->image_path);
             }
             return $c;
         });
 
         return $this->success($categories);
+    }
+
+    /* ========== Helpers ========== */
+
+    private function storeAsWebpToR2(UploadedFile $file, string $dir): string
+    {
+        $manager = new ImageManager(new Driver());
+
+        $image = $manager->read($file->getPathname())
+                         ->encode(new WebpEncoder(quality: 82));
+
+        $filename = Str::uuid()->toString() . '.webp';
+        $key = trim($dir, '/').'/'.$filename;
+
+        Storage::disk('s3')->put($key, (string) $image, [
+            'visibility'   => 'public',
+            'ContentType'  => 'image/webp',
+            'CacheControl' => 'public, max-age=31536000, immutable',
+        ]);
+
+        return $key;
+    }
+
+    private function publicUrl(string $path): string
+    {
+        $base = rtrim(config('filesystems.disks.s3.url') ?: env('AWS_URL', ''), '/');
+        return $base . '/' . ltrim($path, '/');
     }
 }
