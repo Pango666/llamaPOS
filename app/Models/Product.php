@@ -28,8 +28,24 @@ class Product extends Model
         return $q->where('is_active', true);
     }
 
-    public function getImageUrlAttribute()
+
+    public function getImageUrlAttribute(): ?string
     {
-        return $this->image_path ? Storage::disk('public')->url($this->image_path) : null;
+        $path = $this->image_path ?: null;
+        if (!$path) return null;
+
+        // 1) intenta en R2
+        try {
+            return Storage::disk('s3')->url($path);
+        } catch (\Throwable $e) {
+            // 2) fallback a 'public' por si hay imágenes antiguas en local
+            try {
+                return Storage::disk('public')->url($path);
+            } catch (\Throwable $e2) {
+                // 3) último fallback con AWS_URL
+                $base = config('filesystems.disks.s3.url') ?: env('AWS_URL');
+                return $base ? rtrim($base, '/') . '/' . $path : null;
+            }
+        }
     }
 }

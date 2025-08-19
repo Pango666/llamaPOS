@@ -143,9 +143,9 @@ class CategoryController extends BaseApiController
 
     public function catalog(Request $request)
     {
-        $q           = trim((string) $request->query('q', ''));
-        $categoryId  = $request->query('category_id');
-        $withEmpty   = (bool) $request->boolean('with_empty', false);
+        $q          = trim((string) $request->query('q', ''));
+        $categoryId = $request->query('category_id');
+        $withEmpty  = (bool) $request->boolean('with_empty', false);
 
         $categories = Category::query()
             ->when($categoryId, fn($qq) => $qq->where('id', $categoryId))
@@ -165,11 +165,22 @@ class CategoryController extends BaseApiController
             $categories = $categories->filter(fn($c) => $c->products->count() > 0)->values();
         }
 
-        $categories->transform(function ($c) {
+        // Adjunta URL pública a categoría, productos (y variantes si aplicara)
+        $categories->each(function ($c) {
             if (!empty($c->image_path)) {
                 $c->image_url = $this->publicUrl($c->image_path);
             }
-            return $c;
+            $c->products->each(function ($p) {
+                if (!empty($p->image_path)) {
+                    $p->image_url = $this->publicUrl($p->image_path);
+                }
+                // Si algún día las variantes tienen imagen:
+                $p->variants->each(function ($v) {
+                    if (!empty($v->image_path)) {
+                        $v->image_url = $this->publicUrl($v->image_path);
+                    }
+                });
+            });
         });
 
         return $this->success($categories);
@@ -182,10 +193,10 @@ class CategoryController extends BaseApiController
         $manager = new ImageManager(new Driver());
 
         $image = $manager->read($file->getPathname())
-                         ->encode(new WebpEncoder(quality: 82));
+            ->encode(new WebpEncoder(quality: 82));
 
         $filename = Str::uuid()->toString() . '.webp';
-        $key = trim($dir, '/').'/'.$filename;
+        $key = trim($dir, '/') . '/' . $filename;
 
         Storage::disk('s3')->put($key, (string) $image, [
             'visibility'   => 'public',
@@ -198,7 +209,15 @@ class CategoryController extends BaseApiController
 
     private function publicUrl(string $path): string
     {
-        $base = rtrim(config('filesystems.disks.s3.url') ?: env('AWS_URL', ''), '/');
-        return $base . '/' . ltrim($path, '/');
+        try {
+            return Storage::disk('s3')->url($path);
+        } catch (\Throwable $e) {
+            try {
+                return Storage::disk('public')->url($path);
+            } catch (\Throwable $e2) {
+                $base = config('filesystems.disks.s3.url') ?: env('AWS_URL');
+                return $base ? rtrim($base, '/') . '/' . ltrim($path, '/') : $path;
+            }
+        }
     }
 }
