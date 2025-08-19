@@ -22,7 +22,9 @@ class CategoryController extends BaseApiController
 {
     public function __construct(private CategoryService $service)
     {
-        $this->middleware(['auth:api', 'role:owner']);
+        $this->middleware(['auth:api']);
+
+        $this->middleware('role:owner')->only(['store', 'update', 'destroy']);
     }
 
     public function index()
