@@ -20,18 +20,11 @@ class Category extends Model
 
     public function getImageUrlAttribute(): ?string
     {
-        $path = $this->image_path ?: null;
-        if (!$path) return null;
-
+        if (!$this->image_path) return null;
         try {
-            return Storage::disk('s3')->url($path);
+            return Storage::disk('s3')->url($this->image_path);
         } catch (\Throwable $e) {
-            try {
-                return Storage::disk('public')->url($path);
-            } catch (\Throwable $e2) {
-                $base = config('filesystems.disks.s3.url') ?: env('AWS_URL');
-                return $base ? rtrim($base, '/') . '/' . $path : null;
-            }
+            return Storage::disk('public')->url($this->image_path);
         }
     }
 }

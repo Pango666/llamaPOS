@@ -31,21 +31,12 @@ class Product extends Model
 
     public function getImageUrlAttribute(): ?string
     {
-        $path = $this->image_path ?: null;
-        if (!$path) return null;
-
-        // 1) intenta en R2
+        if (!$this->image_path) return null;
         try {
-            return Storage::disk('s3')->url($path);
+            return Storage::disk('s3')->url($this->image_path);
         } catch (\Throwable $e) {
-            // 2) fallback a 'public' por si hay imágenes antiguas en local
-            try {
-                return Storage::disk('public')->url($path);
-            } catch (\Throwable $e2) {
-                // 3) último fallback con AWS_URL
-                $base = config('filesystems.disks.s3.url') ?: env('AWS_URL');
-                return $base ? rtrim($base, '/') . '/' . $path : null;
-            }
+            // fallback por si tienes imágenes antiguas en local
+            return Storage::disk('public')->url($this->image_path);
         }
     }
 }

@@ -165,21 +165,18 @@ class CategoryController extends BaseApiController
             $categories = $categories->filter(fn($c) => $c->products->count() > 0)->values();
         }
 
-        // Adjunta URL pública a categoría, productos (y variantes si aplicara)
+        // Forzar URL pública en categoría y en productos anidados
         $categories->each(function ($c) {
             if (!empty($c->image_path)) {
-                $c->image_url = $this->publicUrl($c->image_path);
+                $c->image_url = Storage::disk('s3')->url($c->image_path);
             }
-            $c->products->each(function ($p) {
+            $c->products->transform(function ($p) {
                 if (!empty($p->image_path)) {
-                    $p->image_url = $this->publicUrl($p->image_path);
+                    // si el accessor ya está bien, esto no es estrictamente necesario,
+                    // pero lo forzamos para evitar serializadores que ignoran appends.
+                    $p->image_url = Storage::disk('s3')->url($p->image_path);
                 }
-                // Si algún día las variantes tienen imagen:
-                $p->variants->each(function ($v) {
-                    if (!empty($v->image_path)) {
-                        $v->image_url = $this->publicUrl($v->image_path);
-                    }
-                });
+                return $p;
             });
         });
 

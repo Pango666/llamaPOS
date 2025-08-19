@@ -56,7 +56,8 @@ return [
             'url'      => env('AWS_URL'), // <— MUY IMPORTANTE (tu dominio público R2 + /bucket)
             'endpoint' => env('AWS_ENDPOINT'), // https://<accountid>.r2.cloudflarestorage.com
             'use_path_style_endpoint' => true,
-            'throw' => true,
+            'throw' => false,
+            'visibility' => 'public',
         ],
 
     ],
