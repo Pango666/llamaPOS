@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Api\BaseApiController;
@@ -12,16 +13,25 @@ class ProductController extends BaseApiController
 {
     public function __construct(private ProductService $service)
     {
-        $this->middleware(['auth:api','role:owner']);
+        $this->middleware(['auth:api', 'role:owner']);
     }
 
     public function index()
     {
         try {
             $products = $this->service->all();
+
+            // (Opcional) adjuntar URL pública si tienes AWS_URL configurado
+            $products = collect($products)->map(function ($p) {
+                if (!empty($p['image_path'])) {
+                    $p['image_url'] = Storage::disk('s3')->url($p['image_path']);
+                }
+                return $p;
+            });
+
             return $this->success($products);
         } catch (\Exception $e) {
-            Log::error('ProductController@index error', ['msg'=>$e->getMessage()]);
+            Log::error('ProductController@index error', ['msg' => $e->getMessage()]);
             return $this->error('No se pudieron obtener productos', 500);
         }
     }
@@ -32,13 +42,20 @@ class ProductController extends BaseApiController
             $data = $request->validated();
 
             if ($request->hasFile('image')) {
-                $data['image_path'] = $request->file('image')->store('products', 'public');
+                // Guarda en R2 (disco s3). Usa nombre hash por defecto
+                $data['image_path'] = $request->file('image')->store('products', 's3');
             }
 
             $product = $this->service->create($data);
+
+            // (Opcional) añade la URL pública al response
+            if (!empty($product['image_path'])) {
+                $product['image_url'] = Storage::disk('s3')->url($product['image_path']);
+            }
+
             return $this->success($product, 'Producto creado', 201);
         } catch (\Exception $e) {
-            Log::error('ProductController@store error', ['msg'=>$e->getMessage()]);
+            Log::error('ProductController@store error', ['msg' => $e->getMessage()]);
             return $this->error('Error al crear producto', 500);
         }
     }
@@ -47,11 +64,14 @@ class ProductController extends BaseApiController
     {
         try {
             $product = $this->service->find($id);
+            if (!empty($product['image_path'])) {
+                $product['image_url'] = Storage::disk('s3')->url($product['image_path']);
+            }
             return $this->success($product);
         } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
             return $this->error('Producto no encontrado', 404);
         } catch (\Exception $e) {
-            Log::error('ProductController@show error', ['msg'=>$e->getMessage()]);
+            Log::error('ProductController@show error', ['msg' => $e->getMessage()]);
             return $this->error('Error al obtener el producto', 500);
         }
     }
@@ -63,18 +83,31 @@ class ProductController extends BaseApiController
 
             if ($request->hasFile('image')) {
                 $old = $this->service->find($id)['image_path'] ?? null;
+
+                // Borra anterior en el disco que corresponda
                 if ($old) {
-                    Storage::disk('public')->delete($old);
+                    if (Storage::disk('s3')->exists($old)) {
+                        Storage::disk('s3')->delete($old);
+                    } elseif (Storage::disk('public')->exists($old)) {
+                        // por si tienes imágenes antiguas en local
+                        Storage::disk('public')->delete($old);
+                    }
                 }
-                $data['image_path'] = $request->file('image')->store('products', 'public');
+
+                $data['image_path'] = $request->file('image')->store('products', 's3');
             }
 
             $product = $this->service->update($id, $data);
+
+            if (!empty($product['image_path'])) {
+                $product['image_url'] = Storage::disk('s3')->url($product['image_path']);
+            }
+
             return $this->success($product, 'Producto actualizado');
         } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
             return $this->error('Producto no encontrado', 404);
         } catch (\Exception $e) {
-            Log::error('ProductController@update error', ['msg'=>$e->getMessage()]);
+            Log::error('ProductController@update error', ['msg' => $e->getMessage()]);
             return $this->error('Error al actualizar producto', 500);
         }
     }
@@ -83,15 +116,22 @@ class ProductController extends BaseApiController
     {
         try {
             $product = $this->service->find($id);
+
             if (!empty($product['image_path'])) {
-                Storage::disk('public')->delete($product['image_path']);
+                $old = $product['image_path'];
+                if (Storage::disk('s3')->exists($old)) {
+                    Storage::disk('s3')->delete($old);
+                } elseif (Storage::disk('public')->exists($old)) {
+                    Storage::disk('public')->delete($old);
+                }
             }
+
             $this->service->delete($id);
             return $this->success(null, 'Producto eliminado', 204);
         } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
             return $this->error('Producto no encontrado', 404);
         } catch (\Exception $e) {
-            Log::error('ProductController@destroy error', ['msg'=>$e->getMessage()]);
+            Log::error('ProductController@destroy error', ['msg' => $e->getMessage()]);
             return $this->error('Error al eliminar producto', 500);
         }
     }

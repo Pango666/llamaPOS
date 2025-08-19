@@ -22,6 +22,14 @@ class CategoryController extends BaseApiController
     {
         try {
             $categories = $this->service->all();
+
+            $categories = collect($categories)->map(function ($c) {
+                if (!empty($c['image_path'])) {
+                    $c['image_url'] = Storage::disk('s3')->url($c['image_path']);
+                }
+                return $c;
+            });
+
             return $this->success($categories);
         } catch (\Exception $e) {
             Log::error('CategoryController@index error', [
@@ -36,10 +44,17 @@ class CategoryController extends BaseApiController
     {
         try {
             $data = $request->validated();
+
             if ($request->hasFile('image')) {
-                $data['image_path'] = $request->file('image')->store('categories', 'public');
+                $data['image_path'] = $request->file('image')->store('categories', 's3');
             }
+
             $category = $this->service->create($data);
+
+            if (!empty($category['image_path'])) {
+                $category['image_url'] = Storage::disk('s3')->url($category['image_path']);
+            }
+
             return $this->success($category, 'Categoría creada', 201);
         } catch (\Exception $e) {
             Log::error('CategoryController@store error', ['msg' => $e->getMessage()]);
@@ -51,6 +66,9 @@ class CategoryController extends BaseApiController
     {
         try {
             $category = $this->service->find($id);
+            if (!empty($category['image_path'])) {
+                $category['image_url'] = Storage::disk('s3')->url($category['image_path']);
+            }
             return $this->success($category);
         } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
             return $this->error('Categoría no encontrada', 404);
@@ -64,15 +82,27 @@ class CategoryController extends BaseApiController
     {
         try {
             $data = $request->validated();
+
             if ($request->hasFile('image')) {
-                // Elimina imagen anterior si existe
                 $old = $this->service->find($id)['image_path'] ?? null;
+
                 if ($old) {
-                    Storage::disk('public')->delete($old);
+                    if (Storage::disk('s3')->exists($old)) {
+                        Storage::disk('s3')->delete($old);
+                    } elseif (Storage::disk('public')->exists($old)) {
+                        Storage::disk('public')->delete($old);
+                    }
                 }
-                $data['image_path'] = $request->file('image')->store('categories', 'public');
+
+                $data['image_path'] = $request->file('image')->store('categories', 's3');
             }
+
             $category = $this->service->update($id, $data);
+
+            if (!empty($category['image_path'])) {
+                $category['image_url'] = Storage::disk('s3')->url($category['image_path']);
+            }
+
             return $this->success($category, 'Categoría actualizada');
         } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
             return $this->error('Categoría no encontrada', 404);
@@ -86,9 +116,16 @@ class CategoryController extends BaseApiController
     {
         try {
             $category = $this->service->find($id);
+
             if (!empty($category['image_path'])) {
-                Storage::disk('public')->delete($category['image_path']);
+                $old = $category['image_path'];
+                if (Storage::disk('s3')->exists($old)) {
+                    Storage::disk('s3')->delete($old);
+                } elseif (Storage::disk('public')->exists($old)) {
+                    Storage::disk('public')->delete($old);
+                }
             }
+
             $this->service->delete($id);
             return $this->success(null, 'Categoría eliminada', 204);
         } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
@@ -122,6 +159,14 @@ class CategoryController extends BaseApiController
         if (!$withEmpty) {
             $categories = $categories->filter(fn($c) => $c->products->count() > 0)->values();
         }
+
+        // (Opcional) agrega URL pública de imagen
+        $categories->transform(function ($c) {
+            if (!empty($c->image_path)) {
+                $c->image_url = Storage::disk('s3')->url($c->image_path);
+            }
+            return $c;
+        });
 
         return $this->success($categories);
     }
