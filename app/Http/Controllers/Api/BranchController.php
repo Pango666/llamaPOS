@@ -13,7 +13,9 @@ class BranchController extends BaseApiController
     public function __construct(private BranchService $service)
     {
         // Valida token y rol owner en todas las rutas de este controlador
-        $this->middleware(['auth:api', 'role:owner']);
+        $this->middleware(['auth:api']);
+
+        $this->middleware('role:owner')->only(['store', 'update', 'destroy']);
     }
 
     public function index()
