@@ -7,6 +7,7 @@ use App\Models\Product;
 use App\Models\Sale;
 use App\Models\SaleItem;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 
 class SaleService
 {
@@ -100,11 +101,23 @@ class SaleService
 
     public function find(int $id)
     {
-        return Sale::with([
+        $sale = \App\Models\Sale::with([
             'client:id,name,documento,phone,address',
-            'user:id,name',
+            'user:id,name,email',          // ← email por si quieres mostrarlo
             'branch:id,name',
-            'items.product:id,name'
+            'items:id,sale_id,product_id,quantity,price,total,created_at',
+            'items.product:id,name,image_path' // ← traemos image_path para armar url
         ])->findOrFail($id);
+
+        // (opcional) Adjuntar url pública desde R2/S3
+        foreach ($sale->items as $it) {
+            if (!empty($it->product?->image_path)) {
+                $it->product->image_url = Storage::disk('s3')->url($it->product->image_path);
+            } else {
+                $it->product->image_url = null;
+            }
+        }
+
+        return $sale;
     }
 }
