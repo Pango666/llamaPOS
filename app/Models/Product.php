@@ -33,15 +33,11 @@ class Product extends Model
     {
         if (!$this->image_path) return null;
 
-        // Base y bucket desde config/.env
-        $endpoint = rtrim(config('filesystems.disks.s3.endpoint') ?: env('AWS_ENDPOINT'), '/');
-        $bucket   = trim(config('filesystems.disks.s3.bucket')   ?: env('AWS_BUCKET', ''));
-        $key      = ltrim($this->image_path, '/'); // e.g. "products/uuid.webp"
+        // 100% explícito: base pública + bucket + key
+        $base   = rtrim(env('R2_PUBLIC_BASE'), '/');   // 👈 lo defines en .env
+        $bucket = trim(env('AWS_BUCKET', 'komercia')); // "komercia"
+        $key    = ltrim($this->image_path, '/');       // "products/xxx.webp"
 
-        // R2 público correcto: https://<account>.r2.cloudflarestorage.com/<bucket>/<key>
-        // (si prefieres dominio pub-*.r2.dev, sustituye $endpoint por env('R2_PUBLIC_BASE'))
-        return $bucket !== ''
-            ? "{$endpoint}/{$bucket}/{$key}"
-            : "{$endpoint}/{$key}";
+        return "{$base}/{$bucket}/{$key}";
     }
 }
