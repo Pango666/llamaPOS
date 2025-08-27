@@ -32,11 +32,16 @@ class Product extends Model
     public function getImageUrlAttribute(): ?string
     {
         if (!$this->image_path) return null;
-        try {
-            return Storage::disk('s3')->url($this->image_path);
-        } catch (\Throwable $e) {
-            // fallback por si tienes imágenes antiguas en local
-            return Storage::disk('public')->url($this->image_path);
-        }
+
+        // Base y bucket desde config/.env
+        $endpoint = rtrim(config('filesystems.disks.s3.endpoint') ?: env('AWS_ENDPOINT'), '/');
+        $bucket   = trim(config('filesystems.disks.s3.bucket')   ?: env('AWS_BUCKET', ''));
+        $key      = ltrim($this->image_path, '/'); // e.g. "products/uuid.webp"
+
+        // R2 público correcto: https://<account>.r2.cloudflarestorage.com/<bucket>/<key>
+        // (si prefieres dominio pub-*.r2.dev, sustituye $endpoint por env('R2_PUBLIC_BASE'))
+        return $bucket !== ''
+            ? "{$endpoint}/{$bucket}/{$key}"
+            : "{$endpoint}/{$key}";
     }
 }

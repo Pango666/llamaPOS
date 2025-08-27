@@ -21,10 +21,16 @@ class Category extends Model
     public function getImageUrlAttribute(): ?string
     {
         if (!$this->image_path) return null;
-        try {
-            return Storage::disk('s3')->url($this->image_path);
-        } catch (\Throwable $e) {
-            return Storage::disk('public')->url($this->image_path);
-        }
+
+        $key     = ltrim($this->image_path, '/'); // ej: "categories/uuid.webp" o "products/uuid.webp"
+        // Toma bucket y base desde config/.env
+        $bucket  = trim(config('filesystems.disks.s3.bucket') ?: env('AWS_BUCKET', ''));
+        // Usa el dominio público que prefieras:
+        // - R2 público "pub-<account>.r2.dev" si defines R2_PUBLIC_BASE en .env
+        // - O el endpoint cloudflarestorage.com del .env
+        $base    = rtrim(env('R2_PUBLIC_BASE')
+            ?: (config('filesystems.disks.s3.endpoint') ?: env('AWS_ENDPOINT')), '/');
+
+        return $bucket !== '' ? "{$base}/{$bucket}/{$key}" : "{$base}/{$key}";
     }
 }
