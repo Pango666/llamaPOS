@@ -21,7 +21,8 @@ Route::middleware('auth:api')->group(function () {
     Route::get('user',      [AuthController::class, 'me']);
     Route::get('auth/user', [AuthController::class, 'me']);
     Route::post('logout',   [AuthController::class, 'logout']);
-
+    Route::post('/auth/change-password', [AuthController::class, 'changePassword']);
+    
     // Demo de roles
     Route::get('demo', [AuthController::class, 'getRoles']);
 
