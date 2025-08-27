@@ -32,12 +32,11 @@ class Product extends Model
     public function getImageUrlAttribute(): ?string
     {
         if (!$this->image_path) return null;
-
-        // 100% explícito: base pública + bucket + key
-        $base   = rtrim(env('R2_PUBLIC_BASE'), '/');   // 👈 lo defines en .env
-        $bucket = trim(env('AWS_BUCKET', 'komercia')); // "komercia"
-        $key    = ltrim($this->image_path, '/');       // "products/xxx.webp"
-
-        return "{$base}/{$bucket}/{$key}";
+        try {
+            return Storage::disk('s3')->url($this->image_path);
+        } catch (\Throwable $e) {
+            // fallback por si tienes imágenes antiguas en local
+            return Storage::disk('public')->url($this->image_path);
+        }
     }
 }

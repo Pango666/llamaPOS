@@ -21,9 +21,10 @@ class Category extends Model
     public function getImageUrlAttribute(): ?string
     {
         if (!$this->image_path) return null;
-        $base   = rtrim(env('R2_PUBLIC_BASE'), '/');
-        $bucket = trim(env('AWS_BUCKET', 'komercia'));
-        $key    = ltrim($this->image_path, '/');
-        return "{$base}/{$bucket}/{$key}";
+        try {
+            return Storage::disk('s3')->url($this->image_path);
+        } catch (\Throwable $e) {
+            return Storage::disk('public')->url($this->image_path);
+        }
     }
 }
